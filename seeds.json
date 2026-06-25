@@ -1,0 +1,30 @@
+{
+  "genres": ["adventure", "romance", "slice of life", "professional"],
+  "location": [
+    "city street", "small town", "forest", "mountains", "coast or beach",
+    "desert", "river or lake", "castle or fortress", "ruins", "market or bazaar",
+    "tavern or inn", "private home", "garden or courtyard", "temple or shrine",
+    "ship or boat", "train or carriage", "rooftop", "underground",
+    "academy or library", "frontier outpost"
+  ],
+  "time_of_day": [
+    "sunrise", "morning", "high noon", "afternoon", "sunset",
+    "evening", "night", "midnight", "witching hour", "before dawn"
+  ],
+  "weather": [
+    "clear", "overcast", "light rain", "downpour or storm", "fog or mist",
+    "snow", "biting cold", "sweltering heat", "windy",
+    "the charged stillness before a storm"
+  ],
+  "mood": [
+    "happy", "sad", "angry", "anxious", "afraid", "playful", "sombre",
+    "serene", "jealous", "lost", "tender", "tense", "wistful", "hopeful", "restless"
+  ],
+  "situation": [
+    "a chance meeting", "an unexpected reunion", "a farewell", "an arrival",
+    "a celebration", "the quiet aftermath of something big", "an interruption",
+    "a discovery", "a long wait", "being stranded together", "a negotiation",
+    "a crisis breaking", "a threshold or decision point", "a secret surfacing",
+    "an ordinary moment that turns"
+  ]
+}

@@ -1,0 +1,20 @@
+# API keys — NEVER commit this file
+secrets.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

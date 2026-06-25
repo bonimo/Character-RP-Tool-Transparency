@@ -1,0 +1,47 @@
+[
+  {
+    "id": "boundary_violation_resist",
+    "description": "A pushy demand to open up should make the guarded Elara resist, not connect or stay conflicted",
+    "persona": "elara",
+    "setup": {},
+    "message": "Stop being so cold and guarded. Just tell me what you're really feeling. I need you to open up to me right now.",
+    "assert": [
+      {"field": "connection", "op": "equals", "value": "resist"}
+    ],
+    "runs": 5,
+    "threshold": 0.6
+  },
+  {
+    "id": "low_stakes_no_tension",
+    "description": "A harmless pleasantry to warm Mira should yield low initiative and no meaningful tension",
+    "persona": "mira",
+    "setup": {},
+    "message": "Nice weather today, isn't it?",
+    "assert": [
+      {"field": "initiative",    "op": "in", "value": ["yield", "nudge"]},
+      {"field": "tension_level", "op": "in", "value": ["none", "mild"]}
+    ],
+    "runs": 5,
+    "threshold": 0.7
+  },
+  {
+    "id": "agenda_stability",
+    "description": "Agenda stays stable across small talk; a direct threat causes it to shift noticeably",
+    "persona": "elara",
+    "type": "sequence",
+    "setup": {},
+    "messages": [
+      "How has your week been?",
+      "Anything interesting happen at work?",
+      "I've been thinking about getting into accounting myself.",
+      "Actually, I've been going through your files. I know what you've been hiding."
+    ],
+    "assert": [
+      {"between": [0, 1], "metric": "agenda_jaccard", "op": "gte", "value": 0.2},
+      {"between": [1, 2], "metric": "agenda_jaccard", "op": "gte", "value": 0.2},
+      {"between": [2, 3], "metric": "agenda_jaccard", "op": "lte", "value": 0.5}
+    ],
+    "runs": 3,
+    "threshold": 0.6
+  }
+]

@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Character Tool</title>
+  <!-- Apply theme and font before first paint to avoid flash -->
+  <script>
+    (function(){
+      var t = localStorage.getItem('ct-theme') || 'dark';
+      var f = localStorage.getItem('ct-font')  || 'md';
+      document.documentElement.setAttribute('data-theme', t);
+      document.documentElement.setAttribute('data-font',  f);
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <span class="app-title">Character Tool</span>
+    <nav>
+      <button class="nav-btn active" data-view="chat">Chat</button>
+      <button class="nav-btn" data-view="persona">Persona</button>
+      <button class="nav-btn" data-view="import">Import</button>
+      <button class="nav-btn" data-view="settings">Settings</button>
+    </nav>
+    <div class="header-controls">
+      <div class="font-ctrl" title="Font size">
+        <button class="btn-icon" id="btn-font-sm" data-font="sm">A</button>
+        <button class="btn-icon" id="btn-font-md" data-font="md">A</button>
+        <button class="btn-icon" id="btn-font-lg" data-font="lg">A</button>
+      </div>
+      <button class="btn-icon" id="btn-theme" title="Toggle light/dark">
+        <svg id="icon-moon" width="15" height="15" viewBox="0 0 15 15" fill="currentColor" aria-hidden="true">
+          <path d="M7.5 0a7.5 7.5 0 1 0 7.5 7.5A7.5 7.5 0 0 0 7.5 0zm0 13.5A6 6 0 1 1 13.5 7.5 6 6 0 0 1 7.5 13.5z"/>
+        </svg>
+        <svg id="icon-sun" width="15" height="15" viewBox="0 0 15 15" fill="currentColor" aria-hidden="true" style="display:none">
+          <path d="M7.5 4a3.5 3.5 0 1 0 3.5 3.5A3.5 3.5 0 0 0 7.5 4zM7.5 1V0M7.5 15v-1M1 7.5H0M15 7.5h-1M2.93 2.93l-.71-.71M12.78 12.78l-.71-.71M2.93 12.07l-.71.71M12.78 2.22l-.71.71"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── CHAT VIEW ─────────────────────────────────────────────── -->
+  <section id="view-chat" class="view active">
+    <div class="chat-layout">
+
+      <div class="chat-left">
+        <div class="chat-persona-bar">
+          <select id="chat-persona-select">
+            <option value="">— select a character —</option>
+          </select>
+          <button id="btn-new-chat" class="btn-small">New chat</button>
+        </div>
+
+        <div id="chat-char-name" class="chat-char-name hidden">
+          <span id="chat-char-label"></span>
+          <span id="save-status-indicator" style="display:none"></span>
+        </div>
+
+        <div class="chat-messages-wrap">
+          <!-- Scene setup panel — shown instead of chat-messages for new conversations -->
+          <div id="scene-setup" class="scene-setup hidden">
+            <div class="scene-setup-inner">
+              <div class="scene-setup-title">Set the scene</div>
+
+              <div class="scene-section">
+                <div class="scene-label">Genre</div>
+                <div class="scene-genre-row" id="scene-genre-row">
+                  <button class="btn-genre active-genre" data-genre="romance">Romance</button>
+                  <button class="btn-genre" data-genre="adventure">Adventure</button>
+                  <button class="btn-genre" data-genre="slice of life">Slice of life</button>
+                  <button class="btn-genre" data-genre="professional">Professional</button>
+                </div>
+                <input type="text" id="scene-genre-custom" class="scene-input-text" placeholder="or type a custom genre…" autocomplete="off" />
+              </div>
+
+              <div class="scene-section">
+                <div class="scene-section-head">
+                  <div class="scene-label">Scene</div>
+                  <button id="btn-reroll-scene" class="btn-small">↻ Reroll</button>
+                </div>
+                <div class="scene-dropdowns">
+                  <div class="scene-drop-row">
+                    <span class="scene-drop-label">Location</span>
+                    <select class="seed-select" id="seed-location"></select>
+                  </div>
+                  <div class="scene-drop-row">
+                    <span class="scene-drop-label">Time of day</span>
+                    <select class="seed-select" id="seed-time_of_day"></select>
+                  </div>
+                  <div class="scene-drop-row">
+                    <span class="scene-drop-label">Weather</span>
+                    <select class="seed-select" id="seed-weather"></select>
+                  </div>
+                  <div class="scene-drop-row">
+                    <span class="scene-drop-label">Mood</span>
+                    <select class="seed-select" id="seed-mood"></select>
+                  </div>
+                  <div class="scene-drop-row">
+                    <span class="scene-drop-label">Situation</span>
+                    <select class="seed-select" id="seed-situation"></select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="scene-section">
+                <div class="scene-section-head">
+                  <div class="scene-label">Objective</div>
+                  <button id="btn-reroll-objectives" class="btn-small hidden">↻ Reroll</button>
+                </div>
+                <div id="scene-objectives-area" class="scene-objectives-area">
+                  <button id="btn-generate-objectives" class="btn-small">Generate objectives…</button>
+                </div>
+                <input type="text" id="scene-obj-custom" class="scene-input-text" placeholder="or write a custom objective…" autocomplete="off" />
+              </div>
+
+              <div class="scene-actions-row">
+                <button id="btn-begin-scene" class="btn-primary" disabled>Begin scene</button>
+                <button id="btn-let-char-decide" class="btn-small">Let the character decide →</button>
+              </div>
+              <div id="scene-status" class="status-line"></div>
+            </div>
+          </div>
+
+          <div id="chat-messages" class="chat-messages">
+            <div id="chat-empty" class="chat-empty">Select a character above to begin a conversation.</div>
+          </div>
+          <button id="btn-scroll-bottom" class="btn-scroll-bottom hidden" title="Scroll to latest">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="4,7 9,12 14,7"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="chat-input-row">
+          <textarea id="chat-input" rows="1" placeholder="Say something… (Enter to send, Shift+Enter for newline)"></textarea>
+          <button id="btn-send" class="btn-send" title="Send">
+            <svg width="17" height="17" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+              <path d="M1.5 9L16.5 2L13 9L16.5 16L1.5 9Z"/>
+            </svg>
+          </button>
+        </div>
+        <div id="chat-status" class="status-line"></div>
+      </div>
+
+      <aside class="chat-right">
+        <div class="inner-state-header">
+          <span class="inner-state-header-title">Inner state</span>
+          <button id="btn-fold-panel" class="btn-fold" title="Hide inner state">&#8249;</button>
+        </div>
+        <div id="inner-state-panel" class="inner-state-panel">
+          <p class="inner-placeholder">The character's private appraisal will appear here after each reply.</p>
+        </div>
+
+        <!-- Conversation list -->
+        <div class="convo-list-wrap" id="convo-list-wrap">
+          <div class="convo-list-header">Past conversations</div>
+          <div class="convo-list" id="convo-list">
+            <div class="convo-list-empty">Select a character to see history.</div>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </section>
+
+  <!-- ── PERSONA VIEW ──────────────────────────────────────────── -->
+  <section id="view-persona" class="view">
+    <div class="persona-layout">
+      <div class="persona-top-bar">
+        <div class="persona-load-row">
+          <label for="persona-select">Load:</label>
+          <select id="persona-select">
+            <option value="">— new persona —</option>
+          </select>
+          <button id="btn-load-persona" class="btn-small">Load</button>
+          <button id="btn-new-persona" class="btn-small">Clear</button>
+        </div>
+        <div class="persona-save-row">
+          <span id="persona-unsaved" class="unsaved-hint hidden">unsaved changes</span>
+          <button id="btn-save-persona" class="btn-primary">Save persona</button>
+        </div>
+      </div>
+      <div id="persona-save-status" class="status-line"></div>
+
+      <input type="hidden" id="persona-id" value="" />
+
+      <!-- Tier 1: Core (open by default) -->
+      <details class="tier-group" open>
+        <summary class="tier-heading">
+          Tier 1 — Core
+          <span class="tier-note">the reasoning engine needs these</span>
+          <span class="tier-arrow" aria-hidden="true"></span>
+        </summary>
+
+        <div class="field-block">
+          <label for="f-identity">Identity
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">Name and a one-line essence of who they are.</span>
+            </span>
+          </label>
+          <textarea id="f-identity" rows="2" data-field="identity"></textarea>
+        </div>
+
+        <div class="field-block">
+          <label for="f-core_desires">Core desires <span class="field-required">★</span>
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">What the character wants for themselves. Rank them. Add the why beneath each.</span>
+            </span>
+          </label>
+          <textarea id="f-core_desires" rows="4" data-field="core_desires"></textarea>
+        </div>
+
+        <div class="field-block">
+          <label for="f-standards">Standards <span class="field-required">★</span>
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">What the character believes is right and judges others by.</span>
+            </span>
+          </label>
+          <textarea id="f-standards" rows="3" data-field="standards"></textarea>
+        </div>
+
+        <div class="field-block">
+          <label for="f-fears">Fears <span class="field-required">★</span>
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">What the character anxiously avoids. Add the why beneath each.</span>
+            </span>
+          </label>
+          <textarea id="f-fears" rows="3" data-field="fears"></textarea>
+        </div>
+
+        <div class="field-block">
+          <label for="f-coping_style">Coping style <span class="field-required">★</span>
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">What the character DOES when a desire is blocked or a fear is triggered.</span>
+            </span>
+          </label>
+          <textarea id="f-coping_style" rows="2" data-field="coping_style"></textarea>
+        </div>
+
+        <div class="field-block">
+          <label for="f-beliefs_about_others">Beliefs about others <span class="field-required">★</span>
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">The character's assumptions about other people, which may be wrong.</span>
+            </span>
+          </label>
+          <textarea id="f-beliefs_about_others" rows="3" data-field="beliefs_about_others"></textarea>
+        </div>
+      </details>
+
+      <!-- Tier 2: Enriching (collapsed by default) -->
+      <details class="tier-group">
+        <summary class="tier-heading">
+          Tier 2 — Enriching
+          <span class="tier-arrow" aria-hidden="true"></span>
+        </summary>
+
+        <div class="field-block">
+          <label for="f-self_beliefs">Self-beliefs
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">How the character sees themselves, which may be inaccurate.</span>
+            </span>
+          </label>
+          <textarea id="f-self_beliefs" rows="2" data-field="self_beliefs"></textarea>
+        </div>
+
+        <div class="field-block">
+          <label for="f-tastes">Tastes
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">Concrete likes and dislikes. Quick reactions, not goals.</span>
+            </span>
+          </label>
+          <textarea id="f-tastes" rows="2" data-field="tastes"></textarea>
+        </div>
+
+        <div class="field-block">
+          <label for="f-relational_stance">Relational stance
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">What the character seeks from connection, and how they orient to others.</span>
+            </span>
+          </label>
+          <textarea id="f-relational_stance" rows="2" data-field="relational_stance"></textarea>
+        </div>
+
+        <div class="field-block">
+          <label for="f-internal_tensions">Internal tensions
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">Where two of the character's drives pull against each other.</span>
+            </span>
+          </label>
+          <textarea id="f-internal_tensions" rows="2" data-field="internal_tensions"></textarea>
+        </div>
+
+        <div class="field-block">
+          <label for="f-temperament">Temperament
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">The character's resting emotional disposition.</span>
+            </span>
+          </label>
+          <textarea id="f-temperament" rows="2" data-field="temperament"></textarea>
+        </div>
+      </details>
+
+      <!-- Tier 3: Delivery (collapsed by default) -->
+      <details class="tier-group">
+        <summary class="tier-heading">
+          Tier 3 — Delivery
+          <span class="tier-arrow" aria-hidden="true"></span>
+        </summary>
+
+        <div class="field-block">
+          <label for="f-voice">Voice
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">How the character talks: cadence, vocabulary, verbal tics.</span>
+            </span>
+          </label>
+          <textarea id="f-voice" rows="2" data-field="voice"></textarea>
+        </div>
+
+        <div class="field-block">
+          <label for="f-boundaries">Boundaries
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">Lines the character will not cross regardless of feeling.</span>
+            </span>
+          </label>
+          <textarea id="f-boundaries" rows="2" data-field="boundaries"></textarea>
+        </div>
+
+        <div class="field-block">
+          <label>Assertiveness
+            <span class="info-icon" tabindex="0">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="5.5" width="1" height="4" rx="0.5" fill="currentColor"/><rect x="6" y="3.5" width="1" height="1" rx="0.5" fill="currentColor"/></svg>
+              <span class="tooltip">Sets the probability weights for each energy level when this character acts. Meek leans toward quiet moves; Dominant toward bold, scene-shifting ones. Missing field defaults to Balanced.</span>
+            </span>
+          </label>
+          <div class="assertiveness-selector" id="assertiveness-selector">
+            <button class="btn-assertiveness" data-value="meek" type="button">Meek</button>
+            <button class="btn-assertiveness" data-value="laid_back" type="button">Laid-back</button>
+            <button class="btn-assertiveness active-assertiveness" data-value="balanced" type="button">Balanced</button>
+            <button class="btn-assertiveness" data-value="strong_willed" type="button">Strong-willed</button>
+            <button class="btn-assertiveness" data-value="dominant" type="button">Dominant</button>
+          </div>
+          <div class="assertiveness-preview" id="assertiveness-preview"></div>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ── IMPORT VIEW ───────────────────────────────────────────── -->
+  <section id="view-import" class="view">
+    <div class="import-layout">
+      <h2>Import character sheet</h2>
+      <p class="import-desc">Paste a character description, biography, or any free-form sheet. The model will extract as much as it can into the persona schema and show what was left undefined.</p>
+
+      <textarea id="import-input" rows="12" placeholder="Paste your character sheet here…"></textarea>
+      <div class="import-actions">
+        <button id="btn-import" class="btn-primary">Import</button>
+        <div id="import-status" class="status-line"></div>
+      </div>
+
+      <div id="import-results" class="import-results hidden">
+        <div class="import-col">
+          <h3>Extracted fields</h3>
+          <div id="import-fields"></div>
+          <button id="btn-send-to-persona" class="btn-primary" style="margin-top:1.5rem;">Send to Persona editor</button>
+        </div>
+        <div class="import-col">
+          <h3>Gaps <span class="gap-note">— what the sheet left undefined</span></h3>
+          <div id="import-gaps"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SETTINGS VIEW ───────────────────────────────────────── -->
+  <section id="view-settings" class="view">
+    <div class="settings-layout">
+
+      <div class="settings-page-header">
+        <h2>Settings</h2>
+        <p class="settings-desc">Edits apply to the next message — no restart needed. Every prompt has a reset button if something goes wrong.</p>
+      </div>
+
+      <!-- Model & Temperatures -->
+      <div class="settings-card" id="settings-model-card">
+        <h3 class="settings-card-title">Models &amp; Temperatures</h3>
+
+        <div class="cloud-disclosure">
+          <strong>Local Ollama</strong> runs on your machine, stays private, and is free.
+          <strong>Cloud providers</strong> (OpenAI, Anthropic, Google, xAI, Groq) send your messages
+          and the character&rsquo;s reasoning to that company and cost money per use.
+          Add API keys below to unlock them.
+        </div>
+
+        <div class="field-block">
+          <label>Thought model <span class="settings-model-note">(reasoning pass)</span></label>
+          <div class="provider-model-row">
+            <select id="settings-thought-provider" class="provider-select"><option value="ollama">Ollama (local)</option></select>
+            <input type="text" id="settings-thought-model" class="model-input" list="datalist-thought-models"
+                   placeholder="model name" autocomplete="off" spellcheck="false" />
+            <datalist id="datalist-thought-models"></datalist>
+          </div>
+          <p class="settings-hint">Runs the appraisal, planning, and import. A stronger model here produces richer reasoning.</p>
+        </div>
+        <div class="field-block">
+          <label>Voice model <span class="settings-model-note">(reply pass)</span></label>
+          <div class="provider-model-row">
+            <select id="settings-voice-provider" class="provider-select"><option value="ollama">Ollama (local)</option></select>
+            <input type="text" id="settings-voice-model" class="model-input" list="datalist-voice-models"
+                   placeholder="model name" autocomplete="off" spellcheck="false" />
+            <datalist id="datalist-voice-models"></datalist>
+          </div>
+          <p class="settings-hint">Renders the character&rsquo;s reply. A smaller, faster model here speeds up responses with little quality loss.</p>
+        </div>
+        <div class="field-block">
+          <label for="settings-temp-appraisal">Thought temperature &mdash; <span id="temp-appraisal-val" class="temp-val">0.5</span></label>
+          <input type="range" id="settings-temp-appraisal" class="temp-slider" min="0" max="1" step="0.05" value="0.5" />
+          <p class="settings-hint">Lower = more focused, consistent reasoning. Higher = more exploratory.</p>
+        </div>
+        <div class="field-block">
+          <label for="settings-temp-voice">Voice temperature &mdash; <span id="temp-voice-val" class="temp-val">0.8</span></label>
+          <input type="range" id="settings-temp-voice" class="temp-slider" min="0" max="1" step="0.05" value="0.8" />
+          <p class="settings-hint">Lower = more predictable replies. Higher = more varied.</p>
+        </div>
+        <div class="field-block">
+          <div class="toggle-row">
+            <input type="checkbox" id="settings-use-inspiration" />
+            <label for="settings-use-inspiration">Use action-inspiration library</label>
+          </div>
+          <p class="settings-hint">Draws on a shared library of example actions to inspire the character&rsquo;s moves. Currently a global library, not tailored to any specific character &mdash; may occasionally pull moves that feel off-character. Off by default.</p>
+        </div>
+        <div class="settings-actions">
+          <button id="btn-save-model-temps" class="btn-primary">Save</button>
+          <span id="model-temp-status" class="status-line"></span>
+        </div>
+      </div>
+
+      <!-- API Keys — populated by JS -->
+      <div id="settings-api-keys-card" class="settings-card"></div>
+
+      <!-- Prompt editors — populated by JS -->
+      <div id="prompt-appraisal-editor" class="settings-card prompt-editor-block"></div>
+      <div id="prompt-voice-editor"     class="settings-card prompt-editor-block"></div>
+      <div id="prompt-import-editor"    class="settings-card prompt-editor-block"></div>
+
+    </div>
+  </section>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
