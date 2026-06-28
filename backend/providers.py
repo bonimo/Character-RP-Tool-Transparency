@@ -57,6 +57,57 @@ PROVIDERS: dict = {
         "needs_key": True,
         "env_var":   "GROQ_API_KEY",
     },
+    # ── OpenAI-compatible local servers ─────────────────────────────────────────
+    # All share the same openai-kind streaming adapter; only the base URL differs.
+    # The key is optional — a blank key sends a harmless "Bearer local" placeholder.
+    "lmstudio": {
+        "label":            "LM Studio",
+        "kind":             "openai",
+        "base_url":         "http://localhost:1234/v1",
+        "needs_key":        False,
+        "optional_key":     True,
+        "configurable_url": True,
+    },
+    "llamacpp": {
+        "label":            "llama.cpp server",
+        "kind":             "openai",
+        "base_url":         "http://localhost:8080/v1",
+        "needs_key":        False,
+        "optional_key":     True,
+        "configurable_url": True,
+    },
+    "oobabooga": {
+        "label":            "Oobabooga (text-generation-webui)",
+        "kind":             "openai",
+        "base_url":         "http://localhost:5000/v1",
+        "needs_key":        False,
+        "optional_key":     True,
+        "configurable_url": True,
+    },
+    "koboldcpp": {
+        "label":            "KoboldCpp",
+        "kind":             "openai",
+        "base_url":         "http://localhost:5001/v1",
+        "needs_key":        False,
+        "optional_key":     True,
+        "configurable_url": True,
+    },
+    "vllm": {
+        "label":            "vLLM",
+        "kind":             "openai",
+        "base_url":         "http://localhost:8000/v1",
+        "needs_key":        False,
+        "optional_key":     True,
+        "configurable_url": True,
+    },
+    "custom_local": {
+        "label":            "Custom (OpenAI-compatible)",
+        "kind":             "openai",
+        "base_url":         "",
+        "needs_key":        False,
+        "optional_key":     True,
+        "configurable_url": True,
+    },
 }
 
 
@@ -119,17 +170,21 @@ def key_status() -> dict:
     for pid, prov in PROVIDERS.items():
         key = get_key(pid)
         result[pid] = {
-            "label":     prov["label"],
-            "needs_key": prov["needs_key"],
-            "key_set":   bool(key),
-            "masked":    _mask_key(key) if key else "",
+            "label":            prov["label"],
+            "needs_key":        prov["needs_key"],
+            "optional_key":     prov.get("optional_key", False),
+            "configurable_url": prov.get("configurable_url", False),
+            "default_base_url": prov.get("base_url", ""),
+            "key_set":          bool(key),
+            "masked":           _mask_key(key) if key else "",
         }
     return result
 
 
 # ── Streaming ─────────────────────────────────────────────────────────────────
 
-async def stream_chat(provider: str, model: str, messages: list, temperature: float = 0.7):
+async def stream_chat(provider: str, model: str, messages: list, temperature: float = 0.7,
+                      base_url: str = ""):
     """Async generator yielding text tokens. Dispatches by provider kind."""
     prov = PROVIDERS.get(provider)
     if not prov:
@@ -138,22 +193,28 @@ async def stream_chat(provider: str, model: str, messages: list, temperature: fl
         async for tok in _stream_anthropic(provider, prov, model, messages, temperature):
             yield tok
     else:
-        async for tok in _stream_openai(provider, prov, model, messages, temperature):
+        async for tok in _stream_openai(provider, prov, model, messages, temperature,
+                                        base_url=base_url):
             yield tok
 
 
-async def _stream_openai(provider: str, prov: dict, model: str, messages: list, temperature: float):
+async def _stream_openai(provider: str, prov: dict, model: str, messages: list, temperature: float,
+                         base_url: str = ""):
     key = get_key(provider)
     headers: dict = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = f"Bearer {key}"
+    elif prov.get("configurable_url"):
+        # Some local servers require a non-empty bearer even when they ignore it.
+        headers["Authorization"] = "Bearer local"
+    effective_url = (base_url or prov["base_url"]).rstrip("/")
     body = {
         "model":       model,
         "messages":    messages,
         "temperature": temperature,
         "stream":      True,
     }
-    url = prov["base_url"].rstrip("/") + "/chat/completions"
+    url = effective_url + "/chat/completions"
     async with httpx.AsyncClient() as client:
         async with client.stream("POST", url, headers=headers, json=body, timeout=None) as r:
             if r.status_code >= 400:
@@ -217,23 +278,45 @@ async def _stream_anthropic(provider: str, prov: dict, model: str, messages: lis
                     continue
 
 
-async def complete(provider: str, model: str, messages: list, temperature: float = 0.3) -> str:
+async def complete(provider: str, model: str, messages: list, temperature: float = 0.3,
+                   base_url: str = "") -> str:
     """Accumulates the stream into a single string. For non-streaming uses (import)."""
     parts: list = []
-    async for tok in stream_chat(provider, model, messages, temperature):
+    async for tok in stream_chat(provider, model, messages, temperature, base_url=base_url):
         parts.append(tok)
     return "".join(parts)
 
 
 # ── Model listing ─────────────────────────────────────────────────────────────
 
-async def list_models(provider: str) -> list:
-    """Returns sorted list of model IDs, or [] if unavailable / no key."""
+async def list_models(provider: str, base_url: str = "") -> list:
+    """Returns sorted list of model IDs, or [] if unavailable / no key / not implemented."""
     prov = PROVIDERS.get(provider)
     if not prov:
         return []
 
+    # Configurable-URL providers: try GET /models against the effective base URL.
+    # Falls back to [] silently if the server does not implement the endpoint.
+    if prov.get("configurable_url"):
+        effective_url = (base_url or prov.get("base_url", "")).rstrip("/")
+        if not effective_url:
+            return []
+        key = get_key(provider)
+        hdrs: dict = {}
+        if key:
+            hdrs["Authorization"] = f"Bearer {key}"
+        try:
+            async with httpx.AsyncClient() as c:
+                r = await c.get(effective_url + "/models", headers=hdrs, timeout=5)
+                if r.status_code >= 400:
+                    return []
+                data = r.json().get("data", [])
+                return sorted(m["id"] for m in data if isinstance(m, dict) and "id" in m)
+        except Exception:
+            return []
+
     if not prov["needs_key"]:
+        # Ollama uses its own tags endpoint instead of /models
         try:
             async with httpx.AsyncClient() as c:
                 r = await c.get("http://localhost:11434/api/tags", timeout=5)

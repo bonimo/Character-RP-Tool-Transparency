@@ -1590,6 +1590,30 @@ code.var-pill {
   min-width: 0;
 }
 
+/* ── Editable base-URL row (local OpenAI-compatible providers) ── */
+.provider-url-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.35rem;
+}
+.url-label {
+  font-size: 0.78rem;
+  color: var(--subtle);
+  white-space: nowrap;
+  min-width: 5rem;
+}
+.url-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.82rem;
+}
+.key-optional {
+  font-size: 0.75rem;
+  color: var(--subtle);
+  font-weight: 400;
+}
+
 /* ── Cloud disclosure notice ──────────────────────────────────── */
 .cloud-disclosure {
   background: var(--surface-alt);

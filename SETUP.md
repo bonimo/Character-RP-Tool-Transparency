@@ -15,6 +15,25 @@ The server binds to `127.0.0.1` only, so it is accessible from your own machine 
 
 The appraisal pass (the reasoning call) and the voice pass (the reply call) can each be set to a different model. Both default to Ollama on first run. You change them independently in Settings under "Model and Temperature".
 
+## Local path: other OpenAI-compatible servers
+
+Any server that speaks the OpenAI chat-completions API works. In Settings → Model and Temperature, pick the preset for your server or choose "Custom (OpenAI-compatible)" and type the address.
+
+| Preset | Default address | Notes |
+|---|---|---|
+| LM Studio | `http://localhost:1234/v1` | Enable the local server from LM Studio's "Local Server" tab |
+| llama.cpp server | `http://localhost:8080/v1` | Start with `./llama-server -m model.gguf` |
+| Oobabooga (text-generation-webui) | `http://localhost:5000/v1` | Enable the OpenAI extension in the Extensions tab |
+| KoboldCpp | `http://localhost:5001/v1` | Exposed automatically when KoboldCpp runs |
+| vLLM | `http://localhost:8000/v1` | Start with `python -m vllm.entrypoints.openai.api_server` |
+| Custom (OpenAI-compatible) | *(you type it)* | Any other server that implements the OpenAI chat-completions spec |
+
+The base URL is editable — the presets just prefill a sensible default. If your server listens on a non-standard port, change it in the Base URL field and save.
+
+**API key**: local servers usually ignore authentication. Leave the key blank; the tool sends a harmless `Bearer local` placeholder so the HTTP header is well-formed. If your server requires a real key, paste it in Settings → API Keys under the server's name.
+
+**Model list**: the tool tries to fetch the model list from `/models`. If the server does not implement that endpoint it returns an empty list and you can type the model name directly in the Model field.
+
 ## Cloud path
 
 Supported cloud providers:

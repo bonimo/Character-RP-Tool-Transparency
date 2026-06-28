@@ -1718,6 +1718,10 @@ async function renderSettingsModelTemp() {
   if (tMdl)  tMdl.value  = thoughtMdl.model    || '';
   if (vMdl)  vMdl.value  = voiceMdl.model      || '';
 
+  // Show/populate URL row for configurable-URL providers
+  _updateProviderUrlRow('thought', thoughtMdl.provider || 'ollama', thoughtMdl.base_url || '');
+  _updateProviderUrlRow('voice',   voiceMdl.provider   || 'ollama', voiceMdl.base_url   || '');
+
   // Fetch model lists for current providers in parallel
   await Promise.all([
     _loadModelDatalist('thought', thoughtMdl.provider || 'ollama'),
@@ -1738,14 +1742,34 @@ async function renderSettingsModelTemp() {
   if (inspToggle) inspToggle.checked = !!_settingsCfg.use_inspiration;
 }
 
+function _updateProviderUrlRow(role, providerId, currentBaseUrl) {
+  const urlRow   = document.getElementById(role + '-url-row');
+  const urlInput = document.getElementById('settings-' + role + '-base-url');
+  if (!urlRow || !urlInput) return;
+  const provInfo = _settingsProviders[providerId];
+  if (provInfo && provInfo.configurable_url) {
+    urlRow.style.display = '';
+    urlInput.value = currentBaseUrl || provInfo.default_base_url || '';
+  } else {
+    urlRow.style.display = 'none';
+    urlInput.value = '';
+  }
+}
+
 async function _loadModelDatalist(role, providerId) {
   const dlId    = 'datalist-' + role + '-models';
   const datalist = document.getElementById(dlId);
   if (!datalist) return;
   datalist.innerHTML = '';
   try {
-    const res    = await fetch('/api/providers/' + encodeURIComponent(providerId) + '/models')
-      .then(r => r.json()).catch(() => ({}));
+    let url = '/api/providers/' + encodeURIComponent(providerId) + '/models';
+    const provInfo = _settingsProviders[providerId];
+    if (provInfo && provInfo.configurable_url) {
+      const urlInput = document.getElementById('settings-' + role + '-base-url');
+      const baseUrl = (urlInput && urlInput.value.trim()) || provInfo.default_base_url || '';
+      if (baseUrl) url += '?base_url=' + encodeURIComponent(baseUrl);
+    }
+    const res    = await fetch(url).then(r => r.json()).catch(() => ({}));
     const models = Array.isArray(res.models) ? res.models : [];
     models.forEach(m => {
       const opt = document.createElement('option');
@@ -1755,31 +1779,44 @@ async function _loadModelDatalist(role, providerId) {
   } catch (_) {}
 }
 
+function _keyRowHtml(pid, info, optional) {
+  const statusHtml = info.key_set
+    ? '<span class="key-status-badge key-set">set: ' + escapeHtml(info.masked) + '</span>'
+    : '<span class="key-status-badge key-unset">not set</span>';
+  const optBadge = optional ? ' <span class="key-optional">(optional)</span>' : '';
+  return '<div class="key-row">'
+    + '<div class="key-row-label">' + escapeHtml(info.label) + optBadge + ' ' + statusHtml + '</div>'
+    + '<div class="key-row-controls">'
+    + '<input type="password" class="key-input" id="key-input-' + escapeHtml(pid) + '" '
+    + 'placeholder="paste key here" autocomplete="off" />'
+    + '<button class="btn-small btn-save-key" data-provider="' + escapeHtml(pid) + '">Save</button>'
+    + '<button class="btn-small btn-clear-key" data-provider="' + escapeHtml(pid) + '">Clear</button>'
+    + '</div>'
+    + '<span class="status-line key-msg" id="key-msg-' + escapeHtml(pid) + '"></span>'
+    + '</div>';
+}
+
 function renderApiKeysSection() {
   const card = document.getElementById('settings-api-keys-card');
   if (!card) return;
-  const cloudProviders = Object.entries(_settingsProviders).filter(([, info]) => info.needs_key);
-  if (!cloudProviders.length) {
+  const cloudProviders    = Object.entries(_settingsProviders).filter(([, info]) => info.needs_key);
+  const optionalProviders = Object.entries(_settingsProviders).filter(([, info]) => info.optional_key && !info.needs_key);
+  if (!cloudProviders.length && !optionalProviders.length) {
     card.innerHTML = '<h3 class="settings-card-title">API Keys</h3>'
-      + '<p class="settings-hint">No cloud providers available.</p>';
+      + '<p class="settings-hint">No providers with keys available.</p>';
     return;
   }
   let html = '<h3 class="settings-card-title">API Keys</h3>';
   cloudProviders.forEach(([pid, info]) => {
-    const statusHtml = info.key_set
-      ? '<span class="key-status-badge key-set">set: ' + escapeHtml(info.masked) + '</span>'
-      : '<span class="key-status-badge key-unset">not set</span>';
-    html += '<div class="key-row">'
-      + '<div class="key-row-label">' + escapeHtml(info.label) + ' ' + statusHtml + '</div>'
-      + '<div class="key-row-controls">'
-      + '<input type="password" class="key-input" id="key-input-' + escapeHtml(pid) + '" '
-      + 'placeholder="paste key here" autocomplete="off" />'
-      + '<button class="btn-small btn-save-key" data-provider="' + escapeHtml(pid) + '">Save</button>'
-      + '<button class="btn-small btn-clear-key" data-provider="' + escapeHtml(pid) + '">Clear</button>'
-      + '</div>'
-      + '<span class="status-line key-msg" id="key-msg-' + escapeHtml(pid) + '"></span>'
-      + '</div>';
+    html += _keyRowHtml(pid, info, false);
   });
+  if (optionalProviders.length) {
+    html += '<p class="settings-hint" style="margin-top:1rem;margin-bottom:0.5rem">'
+      + 'Local servers — only needed if your server requires authentication:</p>';
+    optionalProviders.forEach(([pid, info]) => {
+      html += _keyRowHtml(pid, info, true);
+    });
+  }
   card.innerHTML = html;
   card.querySelectorAll('.btn-save-key').forEach(btn => {
     btn.addEventListener('click', () => _saveApiKey(btn.dataset.provider));
@@ -1918,14 +1955,26 @@ document.getElementById('settings-temp-voice').addEventListener('input', functio
 
 document.getElementById('btn-save-model-temps').addEventListener('click', async () => {
   const statusEl = document.getElementById('model-temp-status');
+  const thoughtProvider = (document.getElementById('settings-thought-provider') || {}).value || 'ollama';
   const thought_model = {
-    provider: (document.getElementById('settings-thought-provider') || {}).value || 'ollama',
+    provider: thoughtProvider,
     model:    ((document.getElementById('settings-thought-model') || {}).value || '').trim(),
   };
+  const tProvInfo = _settingsProviders[thoughtProvider];
+  if (tProvInfo && tProvInfo.configurable_url) {
+    const urlEl = document.getElementById('settings-thought-base-url');
+    if (urlEl) thought_model.base_url = urlEl.value.trim();
+  }
+  const voiceProvider = (document.getElementById('settings-voice-provider') || {}).value || 'ollama';
   const voice_model = {
-    provider: (document.getElementById('settings-voice-provider') || {}).value || 'ollama',
+    provider: voiceProvider,
     model:    ((document.getElementById('settings-voice-model') || {}).value || '').trim(),
   };
+  const vProvInfo = _settingsProviders[voiceProvider];
+  if (vProvInfo && vProvInfo.configurable_url) {
+    const urlEl = document.getElementById('settings-voice-base-url');
+    if (urlEl) voice_model.base_url = urlEl.value.trim();
+  }
   const temp_appraisal  = parseFloat(document.getElementById('settings-temp-appraisal').value);
   const temp_voice      = parseFloat(document.getElementById('settings-temp-voice').value);
   const use_inspiration = !!(document.getElementById('settings-use-inspiration') || {}).checked;
@@ -1949,13 +1998,15 @@ document.getElementById('btn-save-model-temps').addEventListener('click', async 
   }
 });
 
-// When provider changes, fetch that provider's model list
+// When provider changes, update URL row then fetch that provider's model list
 document.getElementById('settings-thought-provider')?.addEventListener('change', function () {
+  _updateProviderUrlRow('thought', this.value, '');
   _loadModelDatalist('thought', this.value);
   const inp = document.getElementById('settings-thought-model');
   if (inp) inp.value = '';
 });
 document.getElementById('settings-voice-provider')?.addEventListener('change', function () {
+  _updateProviderUrlRow('voice', this.value, '');
   _loadModelDatalist('voice', this.value);
   const inp = document.getElementById('settings-voice-model');
   if (inp) inp.value = '';

@@ -11,8 +11,10 @@ import time
 import uuid
 from pathlib import Path
 
+import urllib.parse
+
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -1073,6 +1075,15 @@ def _validate_id(s: str) -> bool:
     """Reject IDs that could escape the intended directory via path traversal."""
     return bool(s and re.match(r'^[a-zA-Z0-9_-]+$', s))
 
+def _validate_base_url(url: str) -> bool:
+    """Accept only http or https URLs with a non-empty host."""
+    try:
+        p = urllib.parse.urlparse(url)
+        return p.scheme in ("http", "https") and bool(p.netloc)
+    except Exception:
+        return False
+
+
 def _validate_model_name(s: str) -> bool:
     """Allow the characters that appear in real model names across all providers."""
     return bool(s and isinstance(s, str) and len(s) < 200
@@ -1206,6 +1217,7 @@ async def import_sheet(request: Request):
     thought     = cfg["thought_model"]
     provider_id = thought.get("provider", "ollama")
     model_name  = thought.get("model", CHAT_MODEL)
+    base_url    = thought.get("base_url", "")
 
     prov_cfg = providers.PROVIDERS.get(provider_id, {})
     if prov_cfg.get("needs_key") and not providers.get_key(provider_id):
@@ -1219,7 +1231,8 @@ async def import_sheet(request: Request):
     try:
         prompt   = render(cfg["prompts"]["import"], sheet=sheet)
         messages = [{"role": "user", "content": prompt}]
-        raw_text = await providers.complete(provider_id, model_name, messages, temperature=0.3)
+        raw_text = await providers.complete(provider_id, model_name, messages, temperature=0.3,
+                                            base_url=base_url)
         raw      = _strip_think(raw_text)
         try:
             result = json.loads(raw)
@@ -1290,6 +1303,7 @@ async def appraise(request: Request):
     thought     = cfg["thought_model"]
     provider_id = thought.get("provider", "ollama")
     model_name  = thought.get("model", CHAT_MODEL)
+    base_url    = thought.get("base_url", "")
     messages    = [{"role": "user", "content": prompt}]
 
     # Upfront key check: fail fast with a proper HTTP error the frontend can display
@@ -1304,7 +1318,7 @@ async def appraise(request: Request):
     async def _appraise_gen():
         try:
             async for tok in providers.stream_chat(provider_id, model_name, messages,
-                                                   cfg["temp_appraisal"]):
+                                                   cfg["temp_appraisal"], base_url=base_url):
                 yield tok
         except providers.ProviderError as e:
             yield f"\n\n[{e}]"
@@ -1345,6 +1359,7 @@ async def respond(request: Request):
     voice       = cfg["voice_model"]
     provider_id = voice.get("provider", "ollama")
     model_name  = voice.get("model", CHAT_MODEL)
+    base_url    = voice.get("base_url", "")
     messages    = [{"role": "user", "content": prompt}]
 
     prov_cfg = providers.PROVIDERS.get(provider_id, {})
@@ -1358,7 +1373,7 @@ async def respond(request: Request):
     async def _voice_gen():
         try:
             async for tok in providers.stream_chat(provider_id, model_name, messages,
-                                                   cfg["temp_voice"]):
+                                                   cfg["temp_voice"], base_url=base_url):
                 yield tok
         except providers.ProviderError as e:
             yield f"\n\n[{e}]"
@@ -1528,7 +1543,13 @@ async def put_config(request: Request):
                 return JSONResponse({"error": f"unknown provider: {prov}"}, status_code=400)
             if not _validate_model_name(mdl):
                 return JSONResponse({"error": f"invalid model name for {_fld}"}, status_code=400)
-            cfg[_fld] = {"provider": prov, "model": mdl}
+            new_val: dict = {"provider": prov, "model": mdl}
+            if providers.PROVIDERS[prov].get("configurable_url"):
+                raw_url = str(val.get("base_url", "")).strip()
+                if raw_url and not _validate_base_url(raw_url):
+                    return JSONResponse({"error": f"invalid base_url for {_fld}"}, status_code=400)
+                new_val["base_url"] = raw_url or providers.PROVIDERS[prov].get("base_url", "")
+            cfg[_fld] = new_val
     if "temp_appraisal" in body:
         cfg["temp_appraisal"] = round(max(0.0, min(1.0, float(body["temp_appraisal"]))), 2)
     if "temp_voice" in body:
@@ -1573,10 +1594,16 @@ def get_providers():
 
 
 @app.get("/api/providers/{provider_id}/models")
-async def get_provider_models(provider_id: str):
+async def get_provider_models(provider_id: str, base_url: str = Query(default="")):
     if provider_id not in providers.PROVIDERS:
         return JSONResponse({"error": "unknown provider"}, status_code=400)
-    models = await providers.list_models(provider_id)
+    prov = providers.PROVIDERS[provider_id]
+    effective_url = ""
+    if prov.get("configurable_url") and base_url:
+        if not _validate_base_url(base_url):
+            return JSONResponse({"error": "invalid base_url"}, status_code=400)
+        effective_url = base_url
+    models = await providers.list_models(provider_id, base_url=effective_url)
     return {"models": models}
 
 
@@ -1588,7 +1615,8 @@ async def set_api_key(request: Request):
     key      = body.get("key", "")   # intentionally not logged anywhere
     if provider not in providers.PROVIDERS:
         return JSONResponse({"error": "unknown provider"}, status_code=400)
-    if not providers.PROVIDERS[provider].get("needs_key"):
+    prov = providers.PROVIDERS[provider]
+    if not prov.get("needs_key") and not prov.get("optional_key"):
         return JSONResponse({"error": "this provider does not use a key"}, status_code=400)
     try:
         providers.set_key(provider, key.strip() if isinstance(key, str) else "")
@@ -1613,6 +1641,7 @@ async def extract_scene_facts(request: Request):
     thought     = cfg["thought_model"]
     provider_id = thought.get("provider", "ollama")
     model_name  = thought.get("model", CHAT_MODEL)
+    base_url    = thought.get("base_url", "")
 
     prov_cfg = providers.PROVIDERS.get(provider_id, {})
     if prov_cfg.get("needs_key") and not providers.get_key(provider_id):
@@ -1632,7 +1661,8 @@ async def extract_scene_facts(request: Request):
 
     raw_text = ""
     try:
-        raw_text = await providers.complete(provider_id, model_name, messages, temperature=0.2)
+        raw_text = await providers.complete(provider_id, model_name, messages, temperature=0.2,
+                                            base_url=base_url)
         raw = _strip_think(raw_text)
         try:
             result = json.loads(raw)
@@ -1692,6 +1722,7 @@ async def generate_objectives(request: Request):
     thought     = cfg["thought_model"]
     provider_id = thought.get("provider", "ollama")
     model_name  = thought.get("model", CHAT_MODEL)
+    base_url    = thought.get("base_url", "")
 
     prov_cfg = providers.PROVIDERS.get(provider_id, {})
     if prov_cfg.get("needs_key") and not providers.get_key(provider_id):
@@ -1715,7 +1746,8 @@ async def generate_objectives(request: Request):
             context_block=context_block,
         )
         messages = [{"role": "user", "content": prompt}]
-        raw_text = await providers.complete(provider_id, model_name, messages, temperature=0.8)
+        raw_text = await providers.complete(provider_id, model_name, messages, temperature=0.8,
+                                            base_url=base_url)
         raw      = _strip_think(raw_text)
         try:
             result = json.loads(raw)
@@ -1754,6 +1786,7 @@ async def scene_open(request: Request):
     voice       = cfg["voice_model"]
     provider_id = voice.get("provider", "ollama")
     model_name  = voice.get("model", CHAT_MODEL)
+    base_url    = voice.get("base_url", "")
 
     prov_cfg = providers.PROVIDERS.get(provider_id, {})
     if prov_cfg.get("needs_key") and not providers.get_key(provider_id):
@@ -1778,7 +1811,7 @@ async def scene_open(request: Request):
     async def _open_gen():
         try:
             async for tok in providers.stream_chat(provider_id, model_name, messages,
-                                                   cfg["temp_voice"]):
+                                                   cfg["temp_voice"], base_url=base_url):
                 yield tok
         except providers.ProviderError as e:
             yield f"\n\n[{e}]"

@@ -400,7 +400,7 @@
         <h3 class="settings-card-title">Models &amp; Temperatures</h3>
 
         <div class="cloud-disclosure">
-          <strong>Local Ollama</strong> runs on your machine, stays private, and is free.
+          <strong>Local servers</strong> (Ollama, LM Studio, llama.cpp, and others) run on your machine, stay private, and are free.
           <strong>Cloud providers</strong> (OpenAI, Anthropic, Google, xAI, Groq) send your messages
           and the character&rsquo;s reasoning to that company and cost money per use.
           Add API keys below to unlock them.
@@ -414,6 +414,11 @@
                    placeholder="model name" autocomplete="off" spellcheck="false" />
             <datalist id="datalist-thought-models"></datalist>
           </div>
+          <div class="provider-url-row" id="thought-url-row" style="display:none">
+            <span class="url-label">Base URL</span>
+            <input type="text" id="settings-thought-base-url" class="url-input"
+                   placeholder="http://localhost:1234/v1" autocomplete="off" spellcheck="false" />
+          </div>
           <p class="settings-hint">Runs the appraisal, planning, and import. A stronger model here produces richer reasoning.</p>
         </div>
         <div class="field-block">
@@ -423,6 +428,11 @@
             <input type="text" id="settings-voice-model" class="model-input" list="datalist-voice-models"
                    placeholder="model name" autocomplete="off" spellcheck="false" />
             <datalist id="datalist-voice-models"></datalist>
+          </div>
+          <div class="provider-url-row" id="voice-url-row" style="display:none">
+            <span class="url-label">Base URL</span>
+            <input type="text" id="settings-voice-base-url" class="url-input"
+                   placeholder="http://localhost:1234/v1" autocomplete="off" spellcheck="false" />
           </div>
           <p class="settings-hint">Renders the character&rsquo;s reply. A smaller, faster model here speeds up responses with little quality loss.</p>
         </div>
